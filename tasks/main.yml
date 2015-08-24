@@ -1,0 +1,41 @@
+- name: Get Slave Status
+  mysql_replication: mode=getslave
+  register: slaveStat
+
+- name:  Are we ok?
+  debug: msg="Do it"
+  when: >
+      (slaveStat.Seconds_Behind_Master < 1)
+      and (slaveStat.Slave_IO_Running=="Yes")
+
+- name: show logs
+  shell: mysql -e 'flush logs';
+  delegate_to: "{{ slave }}"
+  when: >
+      (slaveStat.Seconds_Behind_Master < 1)
+      and (slaveStat.Slave_IO_Running=="Yes")
+
+- name: Get Slave Status after flush
+  mysql_replication: mode=getslave
+  register: slaveStat
+
+- name:  Are we still ok?
+  debug: msg="Do it"
+  when: >
+      (slaveStat.Seconds_Behind_Master < 1)
+      and (slaveStat.Slave_IO_Running=="Yes")
+
+- name: show logs
+  shell: mysql -e 'show binary logs' | tail -n 1 | awk '{print $1}';
+  register: logs
+  delegate_to: "{{ slave }}"
+
+- name:  msg logs
+  debug: msg="{{ logs.stdout }}"
+
+- name:  purge logs
+  shell: mysql -e "purge binary logs to '{{logs.stdout}}'"
+  when: >
+      (slaveStat.Seconds_Behind_Master < 1)
+      and (slaveStat.Slave_IO_Running=="Yes")
+  delegate_to: "{{ slave }}"
